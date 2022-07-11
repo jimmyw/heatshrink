@@ -18,7 +18,7 @@ all: heatshrink test_runners libraries
 
 libraries: libheatshrink_static.a libheatshrink_dynamic.a
 
-test_runners: test_heatshrink_static test_heatshrink_dynamic
+test_runners: test_heatshrink_static test_heatshrink_dynamic test_stream
 test: test_runners
 	./test_heatshrink_static
 	./test_heatshrink_dynamic
@@ -103,6 +103,9 @@ test_heatshrink_dynamic: test_heatshrink_dynamic.od test_heatshrink_dynamic_thef
 	${CC} -o $@ $< ${CFLAGS_DYNAMIC} test_heatshrink_dynamic_theft.od ${DYNAMIC_LDFLAGS}
 
 test_heatshrink_static: test_heatshrink_static.os libheatshrink_static.a
+	${CC} -o $@ $< ${CFLAGS_STATIC} ${STATIC_LDFLAGS}
+
+test_stream: test_stream.os libheatshrink_static.a
 	${CC} -o $@ $< ${CFLAGS_STATIC} ${STATIC_LDFLAGS}
 
 libheatshrink_static.a: ${STATIC_OBJS}
