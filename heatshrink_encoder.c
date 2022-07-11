@@ -141,7 +141,13 @@ HSE_sink_res heatshrink_encoder_sink(heatshrink_encoder *hse,
     }
 
     /* Sinking more content after saying the content is done, tsk tsk */
-    if (is_finishing(hse)) { return HSER_SINK_ERROR_MISUSE; }
+    if (is_finishing(hse)) {
+        if (hse->state != HSES_DONE) {
+            return HSER_SINK_ERROR_MISUSE;
+        }
+        hse->state = HSES_NOT_FULL;
+        hse->flags &= ~FLAG_IS_FINISHING;
+    }
 
     /* Sinking more content before processing is done */
     if (hse->state != HSES_NOT_FULL) { return HSER_SINK_ERROR_MISUSE; }
@@ -371,8 +377,11 @@ static HSE_state st_flush_bit_buffer(heatshrink_encoder *hse,
         LOG("-- done!\n");
         return HSES_DONE;
     } else if (can_take_byte(oi)) {
-        LOG("-- flushing remaining byte (bit_index == 0x%02x)\n", hse->bit_index);
+        LOG(" > flushing remaining byte 0x%02x (bit_index == 0x%02x)\n", hse->current_byte, hse->bit_index);
         oi->buf[(*oi->output_size)++] = hse->current_byte;
+        hse->bit_index = 0x80;
+        hse->current_byte = 0x00;
+
         LOG("-- done!\n");
         return HSES_DONE;
     } else {
