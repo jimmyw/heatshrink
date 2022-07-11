@@ -32,9 +32,7 @@ static void dump_buf(char *name, uint8_t *buf, uint16_t count) {
     }
 }
 
-static int compress_and_expand_and_check(uint8_t *input, uint32_t input_size, int log_lvl) {
-    heatshrink_encoder_reset(&hse);
-    heatshrink_decoder_reset(&hsd);
+static int compress_and_expand_and_check(uint8_t *input, uint32_t input_size, int min_compression_level, int log_lvl) {
     size_t comp_sz = input_size + (input_size/2) + 4;
     size_t decomp_sz = input_size + (input_size/2) + 4;
     uint8_t *comp = malloc(comp_sz);
@@ -74,7 +72,15 @@ static int compress_and_expand_and_check(uint8_t *input, uint32_t input_size, in
             ASSERT_EQ(HSER_FINISH_DONE, heatshrink_encoder_finish(&hse));
         }
     }
-    if (log_lvl > 0) printf("in: %u compressed: %u ", input_size, polled);
+
+    // On very small messages, we cant calculate compression level.
+    if (input_size > 10) {
+      int compression_level = polled * 100.0 / input_size;
+      if (log_lvl > 0) printf("in: %u compressed: %u compression_level: %d%% ", input_size, polled, compression_level);
+      GREATEST_ASSERT_GT(min_compression_level, compression_level);
+    } else {
+      if (log_lvl > 0) printf("in: %u compressed: %u ", input_size, polled);
+    }
     uint32_t compressed_size = polled;
     sunk = 0;
     polled = 0;
@@ -140,7 +146,36 @@ static int compress_and_expand_and_check(uint8_t *input, uint32_t input_size, in
 TEST pseudorandom_data_should_match(uint32_t size, uint32_t seed) {
     uint8_t input[size];
     fill_with_pseudorandom_letters(input, size, seed);
-    return compress_and_expand_and_check(input, size, 0);
+    heatshrink_encoder_reset(&hse);
+    heatshrink_decoder_reset(&hsd);
+    greatest_test_res res = compress_and_expand_and_check(input, size, 200, 0);
+    if (res == GREATEST_TEST_RES_FAIL)
+      return res;
+
+    heatshrink_encoder_reset(&hse);
+    heatshrink_decoder_reset(&hsd);
+    greatest_test_res res2 = compress_and_expand_and_check(input, size, 200, 0);
+    if (res2 == GREATEST_TEST_RES_FAIL)
+      return res;
+
+    PASS();
+}
+
+TEST pseudorandom_data_should_match_streaming(uint32_t size, uint32_t seed) {
+    uint8_t input[size];
+    fill_with_pseudorandom_letters(input, size, seed);
+    heatshrink_encoder_reset(&hse);
+    heatshrink_decoder_reset(&hsd);
+    greatest_test_res res = compress_and_expand_and_check(input, size, 200, 0);
+    if (res == GREATEST_TEST_RES_FAIL)
+      return res;
+
+    // Compressed size must be less then 25%, as we have not reset the encoder/decoder and can use the last message as index.
+    greatest_test_res res2 = compress_and_expand_and_check(input, size, 25, 0);
+    if (res2 == GREATEST_TEST_RES_FAIL)
+      return res;
+
+    PASS();
 }
 
 SUITE(integration) {
@@ -150,6 +185,7 @@ SUITE(integration) {
             for (uint32_t seed=1; seed<=100; seed++) {
                 if (GREATEST_IS_VERBOSE()) printf(" -- seed %u\n", seed);
                 RUN_TESTp(pseudorandom_data_should_match, size, seed);
+                RUN_TESTp(pseudorandom_data_should_match_streaming, size, seed);
             }
     }
 #endif
