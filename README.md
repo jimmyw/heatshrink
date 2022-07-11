@@ -2,6 +2,17 @@
 
 A data compression/decompression library for embedded/real-time systems.
 
+**This is a streaming enabled feature add for heatshrink**
+
+This is patched to allow for multiple compressions to happen with
+the same index as the previous message compressed. This is good for
+streaming application where every message need to be flushed, but the
+next message can be dependent on the previous one. This allow for far
+greater compression as the previous message can be used as base for the
+next one.
+
+See test_stream.c for an example sending electricity meter data with
+minimal changes between packages.
 
 ## Key Features:
 
