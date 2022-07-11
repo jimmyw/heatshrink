@@ -15,6 +15,7 @@ typedef enum {
 typedef enum {
     HSDR_POLL_EMPTY,            /* input exhausted */
     HSDR_POLL_MORE,             /* more data remaining, call again w/ fresh output buffer */
+    HSDR_POLL_FINISHED,         /* last byte recived */
     HSDR_POLL_ERROR_NULL=-1,    /* NULL arguments */
     HSDR_POLL_ERROR_UNKNOWN=-2,
 } HSD_poll_res;
@@ -50,6 +51,7 @@ typedef struct {
     uint8_t state;              /* current state machine node */
     uint8_t current_byte;       /* current byte of input */
     uint8_t bit_index;          /* current bit index */
+    uint8_t flags;
 
 #if HEATSHRINK_DYNAMIC_ALLOC
     /* Fields that are only used if dynamically allocated. */

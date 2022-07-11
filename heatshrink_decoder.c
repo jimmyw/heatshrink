@@ -33,6 +33,11 @@ static const char *state_names[] = {
 #define ASSERT(X) /* no-op */
 #endif
 
+// Encoder flags
+enum {
+    FLAG_IS_FINISHING = 0x01,
+};
+
 typedef struct {
     uint8_t *buf;               /* output buffer */
     size_t buf_size;            /* buffer size */
@@ -44,6 +49,10 @@ typedef struct {
 /* Forward references. */
 static uint16_t get_bits(heatshrink_decoder *hsd, uint8_t count);
 static void push_byte(heatshrink_decoder *hsd, output_info *oi, uint8_t byte);
+
+static int is_finishing(heatshrink_decoder *hsd) {
+    return hsd->flags & FLAG_IS_FINISHING;
+}
 
 #if HEATSHRINK_DYNAMIC_ALLOC
 heatshrink_decoder *heatshrink_decoder_alloc(uint16_t input_buffer_size,
@@ -110,6 +119,7 @@ HSD_sink_res heatshrink_decoder_sink(heatshrink_decoder *hsd,
     memcpy(&hsd->buffers[hsd->input_size], in_buf, size);
     hsd->input_size += size;
     *input_size = size;
+    hsd->flags &= ~FLAG_IS_FINISHING;
     return HSDR_SINK_OK;
 }
 
@@ -177,8 +187,16 @@ HSD_poll_res heatshrink_decoder_poll(heatshrink_decoder *hsd,
         /* If the current state cannot advance, check if input or output
          * buffer are exhausted. */
         if (hsd->state == in_state) {
-            if (*output_size == out_buf_size) { return HSDR_POLL_MORE; }
-            return HSDR_POLL_EMPTY;
+            if (*output_size == out_buf_size) {
+                return HSDR_POLL_MORE;
+            } else if (is_finishing(hsd)) {
+                hsd->bit_index = 0x00;
+                hsd->current_byte = 0x00;
+                hsd->state = HSDS_TAG_BIT;
+                return HSDR_POLL_FINISHED;
+            } else {
+                return HSDR_POLL_EMPTY;
+            }
         }
     }
 }
@@ -291,7 +309,7 @@ static uint16_t get_bits(heatshrink_decoder *hsd, uint8_t count) {
     uint16_t accumulator = 0;
     int i = 0;
     if (count > 15) { return NO_BITS; }
-    LOG("-- popping %u bit(s)\n", count);
+    LOG("-- popping %u bit(s) bit_index: %02x\n", count, hsd->bit_index);
 
     /* If we aren't able to get COUNT bits, suspend immediately, because we
      * don't track how many bits of COUNT we've accumulated before suspend. */
@@ -307,7 +325,7 @@ static uint16_t get_bits(heatshrink_decoder *hsd, uint8_t count) {
                 return NO_BITS;
             }
             hsd->current_byte = hsd->buffers[hsd->input_index++];
-            LOG("  -- pulled byte 0x%02x\n", hsd->current_byte);
+            LOG("   < pulled byte 0x%02x\n", hsd->current_byte);
             if (hsd->input_index == hsd->input_size) {
                 hsd->input_index = 0; /* input is exhausted */
                 hsd->input_size = 0;
@@ -336,6 +354,9 @@ static uint16_t get_bits(heatshrink_decoder *hsd, uint8_t count) {
 
 HSD_finish_res heatshrink_decoder_finish(heatshrink_decoder *hsd) {
     if (hsd == NULL) { return HSDR_FINISH_ERROR_NULL; }
+    LOG("-- finish, state is %d (%s), input_size %d\n",
+            hsd->state, state_names[hsd->state], hsd->input_size);
+    hsd->flags |= FLAG_IS_FINISHING;
     switch (hsd->state) {
     case HSDS_TAG_BIT:
         return hsd->input_size == 0 ? HSDR_FINISH_DONE : HSDR_FINISH_MORE;
