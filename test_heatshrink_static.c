@@ -99,7 +99,11 @@ static int compress_and_expand_and_check(uint8_t *input, uint32_t input_size, in
             polled += count;
             if (log_lvl > 1) printf("^^ polled %zd\n", count);
         } while (pres == HSDR_POLL_MORE);
-        ASSERT_EQ(HSDR_POLL_EMPTY, pres);
+        if (sunk == compressed_size) {
+          ASSERT_EQ(HSDR_POLL_FINISHED, pres);
+        } else {
+          ASSERT_EQ(HSDR_POLL_EMPTY, pres);
+        }
         if (sunk == compressed_size) {
             HSD_finish_res fres = heatshrink_decoder_finish(&hsd);
             ASSERT_EQ(HSDR_FINISH_DONE, fres);

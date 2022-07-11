@@ -497,7 +497,7 @@ TEST decoder_poll_should_expand_short_literal_and_backref_when_fed_input_byte_by
     size_t out_sz = 0;
     HSD_poll_res pres = heatshrink_decoder_poll(hsd, output, 7, &out_sz);
     ASSERT_EQ(6, out_sz);
-    ASSERT_EQ(HSDR_POLL_EMPTY, pres);
+    ASSERT_EQ(HSDR_POLL_FINISHED, pres);
     ASSERT_EQ('f', output[0]);
     ASSERT_EQ('o', output[1]);
     ASSERT_EQ('o', output[2]);
@@ -724,7 +724,11 @@ static int compress_and_expand_and_check(uint8_t *input, uint32_t input_size, cf
             polled += count;
             if (cfg->log_lvl > 1) printf("^^ polled %zd\n", count);
         } while (pres == HSDR_POLL_MORE);
-        ASSERT_EQ(HSDR_POLL_EMPTY, pres);
+        if (sunk == compressed_size) {
+          ASSERT_EQ(HSDR_POLL_FINISHED, pres);
+        } else {
+          ASSERT_EQ(HSDR_POLL_EMPTY, pres);
+        }
         if (sunk == compressed_size) {
             HSD_finish_res fres = heatshrink_decoder_finish(hsd);
             ASSERT_EQ(HSDR_FINISH_DONE, fres);
